@@ -75,7 +75,13 @@ def read(filename):
 
     # Information for point tags
     point_tags = {}
-    fas = mesh["FAS"] if "FAS" in mesh else f["FAS"][mesh_name]
+    if "FAS" in mesh:
+        fas = mesh["FAS"]
+    elif "FAS" in f and mesh_name in f["FAS"]:
+        fas = f["FAS"][mesh_name]
+    else:
+        fas = {}
+        
     if "NOEUD" in fas:
         point_tags = _read_families(fas["NOEUD"])
 
@@ -201,6 +207,9 @@ def _read_families(fas_data):
     families = {}
     for _, node_set in fas_data.items():
         set_id = node_set.attrs["NUM"]  # unique set id
+        if "GRO" not in node_set: #famille sans nom de groupe (ex: FAMILLE_ZERO)
+            continue 
+            
         n_subsets = node_set["GRO"].attrs["NBR"]  # number of subsets
         nom_dataset = node_set["GRO"]["NOM"][()]  # (n_subsets, 80) of int8
         name = [None] * n_subsets
