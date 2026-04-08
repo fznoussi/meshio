@@ -81,7 +81,7 @@ def read(filename):
         fas = f["FAS"][mesh_name]
     else:
         fas = {}
-        
+
     if "NOEUD" in fas:
         point_tags = _read_families(fas["NOEUD"])
 
@@ -207,9 +207,9 @@ def _read_families(fas_data):
     families = {}
     for _, node_set in fas_data.items():
         set_id = node_set.attrs["NUM"]  # unique set id
-        if "GRO" not in node_set: #famille sans nom de groupe (ex: FAMILLE_ZERO)
-            continue 
-            
+        if "GRO" not in node_set:  # famille sans nom de groupe (ex: FAMILLE_ZERO)
+            continue
+
         n_subsets = node_set["GRO"].attrs["NBR"]  # number of subsets
         nom_dataset = node_set["GRO"]["NOM"][()]  # (n_subsets, 80) of int8
         name = [None] * n_subsets
@@ -274,31 +274,40 @@ def write(filename, mesh):
         family = nodes_group.create_dataset("FAM", data=mesh.point_data["point_tags"])
         family.attrs.create("CGT", 1)
         family.attrs.create("NBR", len(mesh.points))
-
+    
     # Cells (mailles in French)
-    if len(mesh.cells) != len(np.unique([c.type for c in mesh.cells])):
-        raise WriteError("MED files cannot have two sections of the same cell type.")
-    cells_group = time_step.create_group("MAI")
-    cells_group.attrs.create("CGT", 1)
+    cells_by_type = {}
+    cell_tags_by_type = {}
+
     for k, cell_block in enumerate(mesh.cells):
         cell_type = cell_block.type
-        cells = cell_block.data
-        med_type = meshio_to_med_type[cell_type]
-        med_cells = cells_group.create_group(med_type)
-        med_cells.attrs.create("CGT", 1)
-        med_cells.attrs.create("CGS", 1)
-        med_cells.attrs.create("PFL", np.bytes_(profile))
-        nod = med_cells.create_dataset("NOD", data=cells.flatten(order="F") + 1)
-        nod.attrs.create("CGT", 1)
-        nod.attrs.create("NBR", len(cells))
+        if cell_type not in cells_by_type:
+          cells_by_type[cell_type] = []
+          cell_tags_by_type[cell_type] = []
+        cells_by_type[cell_type].append(cell_block.data)
+        if "cell_tags" in mesh.cell_data:
+          cell_tags_by_type[cell_type].append(mesh.cell_data["cell_tags"][k])
+    cells_group = time_step.create_group("MAI")
+    cells_group.attrs.create("CGT", 1)
+    for cell_type, cells_list in cells_by_type.items():
+    # fusion des cellules
+     merged_cells = np.concatenate(cells_list, axis=0)
+     med_type = meshio_to_med_type[cell_type]
+     med_cells = cells_group.create_group(med_type)
+     med_cells.attrs.create("CGT", 1)
+     med_cells.attrs.create("CGS", 1)
+     med_cells.attrs.create("PFL", np.bytes_(profile))
+     nod = med_cells.create_dataset("NOD", data=merged_cells.flatten(order="F") + 1)
+     nod.attrs.create("CGT", 1)
+     nod.attrs.create("NBR", len(merged_cells))
+
 
         # Cell tags
-        if "cell_tags" in mesh.cell_data:  # works only for med -> med
-            family = med_cells.create_dataset(
-                "FAM", data=mesh.cell_data["cell_tags"][k]
-            )
-            family.attrs.create("CGT", 1)
-            family.attrs.create("NBR", len(cells))
+     if "cell_tags" in mesh.cell_data and cell_tags_by_type[cell_type]:
+        merged_tags = np.concatenate(cell_tags_by_type[cell_type], axis=0)
+        family = med_cells.create_dataset("FAM", data=merged_tags)
+        family.attrs.create("CGT", 1)
+        family.attrs.create("NBR", len(merged_cells))
 
     # Information about point and cell sets (familles in French)
     fas = f.create_group("FAS")
