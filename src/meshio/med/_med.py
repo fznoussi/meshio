@@ -201,6 +201,8 @@ def _read_families(fas_data):
     families = {}
     for _, node_set in fas_data.items():
         set_id = node_set.attrs["NUM"]  # unique set id
+        if "GRO" not in node_set: # no group information, skip
+            continue
         n_subsets = node_set["GRO"].attrs["NBR"]  # number of subsets
         nom_dataset = node_set["GRO"]["NOM"][()]  # (n_subsets, 80) of int8
         name = [None] * n_subsets
