@@ -90,6 +90,7 @@ def _read_header(f):
 # meshio uses same precision but exponential notation `%.16e`.
 def write(filename, mesh, fmt_version="4.1", binary=True, float_fmt=".16e"):
     """Writes a Gmsh msh file."""
+    mesh = _convert_med_tags_to_gmsh(mesh)
     try:
         writer = _writers[fmt_version]
     except KeyError:
