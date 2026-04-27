@@ -86,9 +86,18 @@ def read(filename):
     for med_cell_type, med_cell_type_group in med_cells.items():
         cell_type = med_to_meshio_type[med_cell_type]
         cell_types.append(cell_type)
-        nod = med_cell_type_group["NOD"]
-        n_cells = nod.attrs["NBR"]
-        cells += [(cell_type, nod[()].reshape(n_cells, -1, order="F") - 1)]
+        if med_cell_type in ["POG", "POG2"]:  # polygonal cells with variable number of nodes
+            nod = med_cell_type_group["NOD"][()] - 1 
+            inn = med_cell_type_group["INN"][()]
+
+            polygons = [
+                nod[inn[i] -1 : inn[i + 1] - 1] for i in range(len(inn) - 1)
+            ]
+            cells.append((cell_type, polygons))
+        else:
+            nod = med_cell_type_group["NOD"]
+            n_cells = nod.attrs["NBR"]
+            cells += [(cell_type, nod[()].reshape(n_cells, -1, order="F") - 1)]
 
         # Cell tags
         if "FAM" in med_cell_type_group:
