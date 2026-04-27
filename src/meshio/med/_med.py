@@ -9,6 +9,8 @@ from .._common import num_nodes_per_cell
 from .._exceptions import ReadError, WriteError
 from .._helpers import register_format
 from .._mesh import Mesh
+from ._med41 import FieldBitmaskWriter
+
 
 # https://docs.salome-platform.org/5/med/dev/med__outils_8hxx.html
 meshio_to_med_type = {
@@ -320,13 +322,15 @@ def write(filename, mesh):
     field_names = mesh.field_data["med:nom"] if "med:nom" in mesh.field_data else []
 
     # Nodal data
+    tracker = FieldBitmaskWriter()  #Initialisation du tracker pour MED 4.1
     for name, data in mesh.point_data.items():
         if name == "point_tags":  # ignore point_tags already written under FAS
             continue
         supp = "NOEU"  # nodal data
         field_name = field_names[name_idx] if field_names else None
         name_idx += 1
-        _write_data(fields, mesh_name, field_name, profile, name, supp, data)
+        tracker.notify("MED_NODE", "MED_POINT1", "0000000000000000000100000000000000000001")
+        _write_data(fields, mesh_name, field_name, profile, name, supp, data, tracker=tracker)
 
     # Cell data
     # Only support writing ELEM fields with only 1 Gauss point per cell
@@ -355,8 +359,11 @@ def write(filename, mesh):
                 supp,
                 data,
                 med_type,
+                tracker=tracker,
             )
         name_idx += 1
+        for field_name in fields.keys():
+            tracker.flush(fields[field_name])
 
 
 def _write_data(
@@ -368,6 +375,7 @@ def _write_data(
     supp,
     data,
     med_type=None,
+    tracker=None,
 ):
     # Skip for general ELGA fields defined at unknown Gauss points
     if supp == "ELGA":
@@ -426,6 +434,14 @@ def _write_data(
 
     # Dataset
     profile.create_dataset("CO", data=data.flatten(order="F"))
+
+    if tracker is not None:
+        if supp == "NOEU":
+            tracker.notify("MED_NODE", "MED_NO_GEOTYPE", step)
+        elif supp in ("ELEM", "ELNO") and med_type is not None:
+            geo_type = med_to_geo_type.get(med_type)
+            if geo_type:
+                tracker.notify("MED_CELL", geo_type, step)
 
 
 def _create_component_names(n_components):
