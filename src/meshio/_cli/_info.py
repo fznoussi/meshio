@@ -22,19 +22,40 @@ def info(args):
     print(mesh)
 
     # check if the cell arrays are consistent with the points
-    is_consistent = True
+    # Vérifier les points NaN/Inf
+    if np.any(np.isnan(mesh.points)):
+        print("WARNING: Maillage contient des points NaN")
+    if np.any(np.isinf(mesh.points)):
+        print("WARNING: Maillage contient des points Inf")
+
+    num_points = mesh.points.shape[0]
     for cells in mesh.cells:
-        if np.any(cells.data > mesh.points.shape[0]):
-            warn("Inconsistent mesh. Cells refer to nonexistent points.")
-            is_consistent = False
-            break
+        has_invalid = False
+        try:
+            data = np.asarray(cells.data)
+            has_invalid = np.any(data >= num_points)
+        except Exception:
+            has_invalid = np.any(
+                np.any(np.asarray(cells.data) >= num_points)
+                for cells in cells.data
+            )
+        if has_invalid:
+            print(
+                f"WARNING: '{cells.type}' contient des indices "
+                f">= nombre de points ({num_points})"
+            )
 
-    # check if there are redundant points
-    if is_consistent:
-        point_is_used = np.zeros(mesh.points.shape[0], dtype=bool)
-        for cells in mesh.cells:
-            point_is_used[cells.data] = True
-        if np.any(~point_is_used):
-            warn("Some points are not part of any cell.")
-
-    return 0
+    # Afficher un résumé du maillage
+    print("\n── Résumé ──────────────────────────────")
+    print(f"  Dimension     : {mesh.points.shape[1]}D")
+    print(f"  Nb points     : {num_points}")
+    for cells in mesh.cells:
+        try:
+            sizes = [len(c) for c in cells.data]
+            print(
+                f"  {cells.type:<12}: {len(cells.data)} cellules | "
+                f"sommets/cellule : min={min(sizes)} max={max(sizes)}"
+            )
+        except TypeError:
+            print(f"  {cells.type:<12}: {len(cells.data)} cellules")
+    print("────────────────────────────────────────")

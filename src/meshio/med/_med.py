@@ -29,10 +29,24 @@ meshio_to_med_type = {
     "pyramid13": "P13",
     "wedge": "PE6",
     "wedge15": "P15",
+    "polygon" : "POG",
+    "polygon2": "POG2",
 }
 med_to_meshio_type = {v: k for k, v in meshio_to_med_type.items()}
 numpy_void_str = np.bytes_("")
 
+# Dictionnaire de traduction pour le tracker MED 4.1
+med_to_geo_type = {
+    "PO1": "MED_POINT1",
+    "SE2": "MED_SEG2", "SE3": "MED_SEG3", "SE4": "MED_SEG4",
+    "TR3": "MED_TRIA3", "TR6": "MED_TRIA6", "TR7": "MED_TRIA7",
+    "QU4": "MED_QUAD4", "QU8": "MED_QUAD8", "QU9": "MED_QUAD9",
+    "TE4": "MED_TETRA4", "T10": "MED_TETRA10",
+    "HE8": "MED_HEXA8", "H20": "MED_HEXA20", "H27": "MED_HEXA27",
+    "PY5": "MED_PYRA5", "P13": "MED_PYRA13",
+    "PE6": "MED_PENTA6", "P15": "MED_PENTA15", "PE18": "MED_PENTA18",
+    "POG": "MED_POLYGON", "POG2": "MED_POLYGON2"
+}
 
 MED_FLOAT32 = 4
 MED_FLOAT64 = 6
@@ -310,29 +324,38 @@ def write(filename, mesh, med_version="4.1.0", **kwargs):
         family.attrs.create("NBR", len(mesh.points))
 
     # Cells (mailles in French)
-    if len(mesh.cells) != len(np.unique([c.type for c in mesh.cells])):
-        raise WriteError("MED files cannot have two sections of the same cell type.")
-    cells_group = time_step.create_group("MAI")
-    cells_group.attrs.create("CGT", 1)
+    cells_by_type = {}
+    cell_tags_by_type = {}
+
     for k, cell_block in enumerate(mesh.cells):
         cell_type = cell_block.type
-        cells = cell_block.data
-        med_type = meshio_to_med_type[cell_type]
-        med_cells = cells_group.create_group(med_type)
-        med_cells.attrs.create("CGT", 1)
-        med_cells.attrs.create("CGS", 1)
-        med_cells.attrs.create("PFL", np.bytes_(profile))
-        nod = med_cells.create_dataset("NOD", data=cells.flatten(order="F") + 1)
-        nod.attrs.create("CGT", 1)
-        nod.attrs.create("NBR", len(cells))
+        if cell_type not in cells_by_type:
+          cells_by_type[cell_type] = []
+          cell_tags_by_type[cell_type] = []
+        cells_by_type[cell_type].append(cell_block.data)
+        if "cell_tags" in mesh.cell_data:
+          cell_tags_by_type[cell_type].append(mesh.cell_data["cell_tags"][k])
+    cells_group = time_step.create_group("MAI")
+    cells_group.attrs.create("CGT", 1)
+    for cell_type, cells_list in cells_by_type.items():
+    # fusion des cellules
+     merged_cells = np.concatenate(cells_list, axis=0)
+     med_type = meshio_to_med_type[cell_type]
+     med_cells = cells_group.create_group(med_type)
+     med_cells.attrs.create("CGT", 1)
+     med_cells.attrs.create("CGS", 1)
+     med_cells.attrs.create("PFL", np.bytes_(profile))
+     nod = med_cells.create_dataset("NOD", data=merged_cells.flatten(order="F") + 1)
+     nod.attrs.create("CGT", 1)
+     nod.attrs.create("NBR", len(merged_cells))
 
-        # Cell tags
-        if "cell_tags" in mesh.cell_data:  # works only for med -> med
-            family = med_cells.create_dataset(
-                "FAM", data=mesh.cell_data["cell_tags"][k]
-            )
-            family.attrs.create("CGT", 1)
-            family.attrs.create("NBR", len(cells))
+
+    # Cell tags
+     if "cell_tags" in mesh.cell_data and cell_tags_by_type[cell_type]:
+        merged_tags = np.concatenate(cell_tags_by_type[cell_type], axis=0)
+        family = med_cells.create_dataset("FAM", data=merged_tags)
+        family.attrs.create("CGT", 1)
+        family.attrs.create("NBR", len(merged_cells))
 
     # Information about point and cell sets (familles in French)
     fas = f.create_group("FAS")
@@ -377,18 +400,22 @@ def write(filename, mesh, med_version="4.1.0", **kwargs):
     # Only support writing ELEM fields with only 1 Gauss point per cell
     # Or ELNO (DG) fields defined at every node per cell
     for name, d in mesh.cell_data.items():
-        if name == "cell_tags":  # ignore cell_tags already written under FAS
+        if name in ("cell_tags", "gmsh:physical"):
             continue
+        data_by_type = {}
         for cell, data in zip(mesh.cells, d):
-            # Determine the nature of the cell data
-            # Either shape = (n_data, ) or (n_data, n_components) -> ELEM
-            # or shape = (n_data, n_gauss_points, n_components) -> ELNO or ELGA
-            med_type = meshio_to_med_type[cell.type]
-            if data.ndim <= 2:
+            cell_type = cell.type
+            if cell_type not in data_by_type:
+                data_by_type[cell_type] = []
+            data_by_type[cell_type].append(data)
+        for cell_type, data_list in data_by_type.items():
+            merged_data = np.concatenate(data_list, axis=0)
+            med_type = meshio_to_med_type[cell_type]
+            if merged_data.ndim <= 2:
                 supp = "ELEM"
-            elif data.shape[1] == num_nodes_per_cell[cell.type]:
+            elif merged_data.shape[1] == num_nodes_per_cell[cell_type]:
                 supp = "ELNO"
-            else:  # general ELGA data defined at unknown Gauss points
+            else:
                 supp = "ELGA"
             field_name = field_names[name_idx] if field_names else None
             _write_data(
@@ -398,7 +425,7 @@ def write(filename, mesh, med_version="4.1.0", **kwargs):
                 profile,
                 name,
                 supp,
-                data,
+                merged_data,
                 med_type,
                 tracker=tracker,
             )
@@ -432,7 +459,7 @@ def _write_data(
             np.dtype("int32"): 24,  # MED_INT32
             np.dtype("int64"): 26,  # MED_INT64
         }
-        field.attrs.create("TYP", numpy_to_med_type.get[data.dtype])  # MED_FLOAT64
+        field.attrs.create("TYP", numpy_to_med_type.get(data.dtype))  # MED_FLOAT64
         field.attrs.create("UNI", numpy_void_str)  # physical unit
         field.attrs.create("UNT", numpy_void_str)  # time unit
         n_components = 1 if data.ndim == 1 else data.shape[-1]
@@ -460,6 +487,7 @@ def _write_data(
         field = fields[name]
         ts_name = list(field.keys())[-1]
         time_step = field[ts_name]
+        step = ts_name
 
     # Field information
     if supp == "NOEU":

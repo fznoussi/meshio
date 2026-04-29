@@ -138,6 +138,23 @@ def write_points_cells(
     )
     mesh.write(filename, file_format=file_format, **kwargs)
 
+def _pick_best_format(file_formats, mesh):
+    if "gmsh" in file_formats:
+        gmsh_keys = {"gmsh:physical", "gmsh:geometrical", "gmsh:dim_tags"}
+        med_keys = {"cell_tags", "point_tags"}
+        has_gmsh = bool(
+            gmsh_keys & set(mesh.cell_data.keys())
+        ) or bool(
+            gmsh_keys & set(mesh.point_data.keys())
+        )
+        has_med = (
+            bool(med_keys & set(mesh.cell_data.keys()))
+            or bool(med_keys & set(mesh.point_data.keys()))
+            or any(k.startswith("med:") for k in mesh.field_data)
+        )
+        if has_gmsh or has_med:
+            return "gmsh"
+    return file_formats[0]
 
 def write(filename, mesh: Mesh, file_format: str | None = None, **kwargs):
     """Writes mesh together with data to a file.
@@ -161,7 +178,10 @@ def write(filename, mesh: Mesh, file_format: str | None = None, **kwargs):
             # deduce possible file formats from extension
             file_formats = _filetypes_from_path(path)
             # just take the first one
-            file_format = file_formats[0]
+            if len(file_formats) > 1:
+                file_format = _pick_best_format(file_formats, mesh)
+            else:
+                file_format = file_formats[0]
 
     try:
         writer = _writer_map[file_format]

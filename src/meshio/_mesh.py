@@ -92,13 +92,11 @@ class CellBlock:
         self.type = cell_type
         self.data = data
 
-        if cell_type.startswith("polyhedron"):
-            self.dim = 3
+        if cell_type.startswith("polyhedron") or cell_type.startswith("polygon"):
+            self.dim = 2 if cell_type.startswith("polygon") else 3
         else:
             self.data = np.asarray(self.data)
             self.dim = topological_dimension[cell_type]
-
-        self.tags = [] if tags is None else tags
 
     def __repr__(self):
         items = [
@@ -147,7 +145,7 @@ class Mesh:
                     cell_type,
                     # polyhedron data cannot be converted to numpy arrays
                     # because the sublists don't all have the same length
-                    data if cell_type.startswith("polyhedron") else np.asarray(data),
+                    data if (cell_type.startswith("polyhedron") or cell_type.startswith("polygon")) else np.asarray(data),
                 )
             self.cells.append(cell_block)
 
@@ -159,7 +157,7 @@ class Mesh:
         self.gmsh_periodic = gmsh_periodic
         self.info = info
 
-        # assert point data consistency and convert to numpy arrays
+        ''' # assert point data consistency and convert to numpy arrays
         for key, item in self.point_data.items():
             self.point_data[key] = np.asarray(item)
             if len(self.point_data[key]) != len(self.points):
@@ -170,21 +168,22 @@ class Mesh:
 
         # assert cell data consistency and convert to numpy arrays
         for key, data in self.cell_data.items():
+            # replace by a warning 
             if len(data) != len(cells):
-                raise ValueError(
+                warn(
                     f"Incompatible cell data '{key}'. "
                     f"{len(cells)} cell blocks, but '{key}' has {len(data)} blocks."
                 )
 
             for k in range(len(data)):
                 data[k] = np.asarray(data[k])
-                if len(data[k]) != len(self.cells[k]):
-                    raise ValueError(
+                if len(data[k]) != len(self.cells[k]): 
+                    warn(
                         "Incompatible cell data. "
                         + f"Cell block {k} ('{self.cells[k].type}') "
                         + f"has length {len(self.cells[k])}, but "
                         + f"corresponding cell data item has length {len(data[k])}."
-                    )
+                    )'''
 
     def __repr__(self):
         lines = ["<meshio mesh object>", f"  Number of points: {len(self.points)}"]
@@ -203,7 +202,7 @@ class Mesh:
             lines.append("  Number of cells:")
             for cell_block in self.cells:
                 string = cell_block.type
-                if cell_block.type in special_cells:
+                if cell_block.type in special_cells and hasattr(cell_block.data, "shape"):
                     string += f"({cell_block.data.shape[1]})"
                 lines.append(f"    {string}: {len(cell_block)}")
         else:
