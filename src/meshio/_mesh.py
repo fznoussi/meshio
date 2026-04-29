@@ -157,7 +157,7 @@ class Mesh:
         self.gmsh_periodic = gmsh_periodic
         self.info = info
 
-        ''' # assert point data consistency and convert to numpy arrays
+        # assert point data consistency and convert to numpy arrays
         for key, item in self.point_data.items():
             self.point_data[key] = np.asarray(item)
             if len(self.point_data[key]) != len(self.points):
@@ -176,14 +176,14 @@ class Mesh:
                 )
 
             for k in range(len(data)):
-                data[k] = np.asarray(data[k])
+                data[k] = np.atleast_1d(data[k])
                 if len(data[k]) != len(self.cells[k]): 
                     warn(
                         "Incompatible cell data. "
                         + f"Cell block {k} ('{self.cells[k].type}') "
                         + f"has length {len(self.cells[k])}, but "
                         + f"corresponding cell data item has length {len(data[k])}."
-                    )'''
+                    )
 
     def __repr__(self):
         lines = ["<meshio mesh object>", f"  Number of points: {len(self.points)}"]
