@@ -186,3 +186,31 @@ def test_read_med_without_fas(tmp_path):
     assert len(mesh.points) == 3
     assert len(mesh.cells) == 1
     assert mesh.cells[0].type == "triangle"
+
+def test_read_med_without_gro(tmp_path):
+    """Une famille sans sous-groupe GRO ne doit pas crasher."""
+    filename = tmp_path / "no_gro.med"
+
+    # Écrire un mesh normal puis modifier le FAS
+    mesh = helpers.tri_mesh
+    meshio.med.write(filename, mesh)
+
+    # Ajouter une famille SANS GRO dans le FAS
+    with h5py.File(filename, "a") as f:
+        fas_mesh = None
+        if "FAS" in f:
+            for key in f["FAS"]:
+                fas_mesh = f["FAS"][key]
+                break
+
+        if fas_mesh is not None:
+            if "ELEME" not in fas_mesh:
+                fas_mesh.create_group("ELEME")
+            eleme = fas_mesh["ELEME"]
+            fam = eleme.create_group("FAM_NO_GRO")
+            fam.attrs.create("NUM", -99)
+            # Pas de GRO ici
+
+    mesh_out = meshio.med.read(filename)
+    assert len(mesh_out.points) > 0
+    assert len(mesh_out.cells) > 0
