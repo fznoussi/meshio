@@ -17,12 +17,32 @@ def add_args(parser):
 
 
 def info(args):
-    # read mesh data
+    
+    # Détection multi-maillage MED
+    if args.infile.endswith(".med"):
+        import h5py
+        with h5py.File(args.infile, "r") as f:
+            mesh_names = list(f["ENS_MAA"].keys())
+        
+        if len(mesh_names) > 1:
+            from meshio.med._medmulti import read_med_multi
+            meshes, names = read_med_multi(args.infile)
+            for mesh, name in zip(meshes, names):
+                print(f"\n{'='*40}")
+                print(f"  Maillage : '{name}'")
+                print(f"{'='*40}")
+                _print_mesh_info(mesh)
+            return
+
+    # Comportement original (un seul maillage)
     mesh = read(args.infile, file_format=args.input_format)
+    _print_mesh_info(mesh)
+
+
+def _print_mesh_info(mesh):
+    """Affiche les infos d'un seul maillage."""
     print(mesh)
 
-    # check if the cell arrays are consistent with the points
-    # Vérifier les points NaN/Inf
     if np.any(np.isnan(mesh.points)):
         print("WARNING: Maillage contient des points NaN")
     if np.any(np.isinf(mesh.points)):
@@ -45,7 +65,6 @@ def info(args):
                 f">= nombre de points ({num_points})"
             )
 
-    # Afficher un résumé du maillage
     print("\n── Résumé ──────────────────────────────")
     print(f"  Dimension     : {mesh.points.shape[1]}D")
     print(f"  Nb points     : {num_points}")

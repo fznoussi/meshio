@@ -1,5 +1,7 @@
 import numpy as np
 
+from meshio.med._medmulti import write_med_multi
+
 from .._helpers import _writer_map, read, reader_map, write
 
 
@@ -50,6 +52,20 @@ def add_args(parser):
 
 def convert(args):
     # read mesh data
+    if args.infile.endswith(".med"):
+        import h5py
+        with h5py.File(args.infile, "r") as f:
+            mesh_names = list(f["ENS_MAA"].keys())
+        
+        if len(mesh_names) > 1:
+            from meshio.med._medmulti import read_med_multi, write_med_multi
+            meshes, names = read_med_multi(args.infile)
+            write_med_multi(args.outfile, meshes, mesh_names=names)
+            for mesh, name in zip(meshes, names):
+                print(f"\n{'='*40}")
+                print(f"  Maillage : '{name}'")
+                print(f"{'='*40}")
+            return
     mesh = read(args.infile, file_format=args.input_format)
 
     # Some converters (like VTK) require `points` to be contiguous.

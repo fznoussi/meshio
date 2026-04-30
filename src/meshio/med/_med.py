@@ -12,6 +12,7 @@ from .._mesh import Mesh
 from ._med41 import FieldBitmaskWriter
 
 
+
 # https://docs.salome-platform.org/5/med/dev/med__outils_8hxx.html
 meshio_to_med_type = {
     "vertex": "PO1",
@@ -72,9 +73,12 @@ def read(filename):
     mesh_ensemble = f["ENS_MAA"]
     meshes = mesh_ensemble.keys()
     if len(meshes) != 1:
-        raise ReadError(f"Must only contain exactly 1 mesh, found {len(meshes)}.")
+        f.close()
+        from ._medmulti import read_med_multi
+        return read_med_multi(filename)
+    
     mesh_name = list(meshes)[0]
-    mesh = mesh_ensemble[mesh_name]
+    mesh = mesh_ensemble[mesh_name] 
 
     dim = mesh.attrs["ESP"]
 
@@ -339,23 +343,23 @@ def write(filename, mesh, med_version="4.1.0", **kwargs):
     cells_group.attrs.create("CGT", 1)
     for cell_type, cells_list in cells_by_type.items():
     # fusion des cellules
-     merged_cells = np.concatenate(cells_list, axis=0)
-     med_type = meshio_to_med_type[cell_type]
-     med_cells = cells_group.create_group(med_type)
-     med_cells.attrs.create("CGT", 1)
-     med_cells.attrs.create("CGS", 1)
-     med_cells.attrs.create("PFL", np.bytes_(profile))
-     nod = med_cells.create_dataset("NOD", data=merged_cells.flatten(order="F") + 1)
-     nod.attrs.create("CGT", 1)
-     nod.attrs.create("NBR", len(merged_cells))
+        merged_cells = np.concatenate(cells_list, axis=0)
+        med_type = meshio_to_med_type[cell_type]
+        med_cells = cells_group.create_group(med_type)
+        med_cells.attrs.create("CGT", 1)
+        med_cells.attrs.create("CGS", 1)
+        med_cells.attrs.create("PFL", np.bytes_(profile))
+        nod = med_cells.create_dataset("NOD", data=merged_cells.flatten(order="F") + 1)
+        nod.attrs.create("CGT", 1)
+        nod.attrs.create("NBR", len(merged_cells))
 
 
     # Cell tags
-     if "cell_tags" in mesh.cell_data and cell_tags_by_type[cell_type]:
-        merged_tags = np.concatenate(cell_tags_by_type[cell_type], axis=0)
-        family = med_cells.create_dataset("FAM", data=merged_tags)
-        family.attrs.create("CGT", 1)
-        family.attrs.create("NBR", len(merged_cells))
+        if "cell_tags" in mesh.cell_data and cell_tags_by_type[cell_type]:
+            merged_tags = np.concatenate(cell_tags_by_type[cell_type], axis=0)
+            family = med_cells.create_dataset("FAM", data=merged_tags)
+            family.attrs.create("CGT", 1)
+            family.attrs.create("NBR", len(merged_cells))
 
     # Information about point and cell sets (familles in French)
     fas = f.create_group("FAS")
@@ -382,7 +386,7 @@ def write(filename, mesh, med_version="4.1.0", **kwargs):
     # Write nodal/cell data
     fields = f.create_group("CHA")
 
-    name_idx = 0
+    name_idx = 0 
     field_names = mesh.field_data["med:nom"] if "med:nom" in mesh.field_data else []
 
     # Nodal data
