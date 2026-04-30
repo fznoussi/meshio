@@ -214,8 +214,6 @@ def test_read_med_without_gro(tmp_path):
     mesh_out = meshio.med.read(filename)
     assert len(mesh_out.points) > 0
     assert len(mesh_out.cells) > 0
-<<<<<<< HEAD
-=======
 
 def test_write_multi_blocks_same_type_with_cell_data(tmp_path):
     """Plusieurs blocs du même type avec cell_data doivent être fusionnés."""
@@ -328,4 +326,4 @@ def test_read_med_partial_cell_data(tmp_path):
     )
     assert field_data[tetra_idx] is not None
     assert np.isclose(field_data[tetra_idx].flat[0], 42.0)
->>>>>>> fix/med-writer-merge-duplicate-cell-types
+
