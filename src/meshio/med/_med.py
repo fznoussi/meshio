@@ -53,14 +53,12 @@ MED_FLOAT32 = 4
 MED_FLOAT64 = 6
 MED_INT32 = 24
 MED_INT64 = 26
-MED_INT = 28
 
 numpy_to_med_type = {
     np.dtype("float32"): MED_FLOAT32,
     np.dtype("float64"): MED_FLOAT64,
     np.dtype("int32"): MED_INT32,
     np.dtype("int64"): MED_INT64,
-    np.dtype("int"): MED_INT,
 }
 
 
@@ -391,6 +389,7 @@ def write(filename, mesh, med_version="4.1.0", **kwargs):
 
     # Nodal data
     tracker = FieldBitmaskWriter()  #Initialisation du tracker pour MED 4.1
+
     for name, data in mesh.point_data.items():
         if name == "point_tags":  # ignore point_tags already written under FAS
             continue
@@ -434,7 +433,7 @@ def write(filename, mesh, med_version="4.1.0", **kwargs):
                 tracker=tracker,
             )
         name_idx += 1
-        for field_name in fields.keys():
+    for field_name in fields.keys():
             tracker.flush(fields[field_name])
 
 

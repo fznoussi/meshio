@@ -1,4 +1,14 @@
+import meshio 
+import h5py
 
+mesh = meshio.read('/home/fatima-zahranoussi/data/meshio/assets/output.med')
+mesh1 = mesh = meshio.read('/home/fatima-zahranoussi/data/meshio/assets/mesh.med')
+
+
+
+
+
+'''
 # benchmark_all_formats.py
 import meshio
 import time
@@ -53,19 +63,7 @@ for n in TAILLES:
             print(f"{fmt:<10} {'ERREUR':>12} : {e}")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+'''
 '''
 
 import meshio

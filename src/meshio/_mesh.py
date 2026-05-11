@@ -10,6 +10,7 @@ from ._common import num_nodes_per_cell, warn
 topological_dimension = {
     "line": 1,
     "polygon": 2,
+    "polygon2": 2,
     "triangle": 2,
     "quad": 2,
     "tetra": 3,
